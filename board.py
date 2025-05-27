@@ -1,7 +1,9 @@
 import pygame
 from consts import *
 from cell import Cell
+
 CELL_SIZE = 50
+neighbours = [(-1,-1), (0,-1),(1,-1),(1,1), (0,1),(-1,1), (-1,0),(1,0)]
 class Board():
     def __init__(self):
         self.cells = []
@@ -11,9 +13,10 @@ class Board():
         for j in range(SCREEN_HEIGHT//CELL_SIZE):
             self.cells.append([])
             for i in range(SCREEN_WIDTH//CELL_SIZE):
-                self.cells[j].append(Cell(i,j))
-                print(f"cell {i} {j} {self.cells[j][i]}")
+                self.cells[j].append(Cell(i,j,CELL_SIZE,CELL_SIZE,"B"))
+                # Button(self.x * CELL_SIZE - 1,y * CELL_SIZE - 1,CELL_SIZE-1,CELL_SIZE - 1, "B")
                 
+
     def draw(self,screen):
         for j in range(SCREEN_HEIGHT//CELL_SIZE):
             for i in range(SCREEN_WIDTH//CELL_SIZE):
