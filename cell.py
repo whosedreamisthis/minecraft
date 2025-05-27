@@ -1,6 +1,5 @@
 import pygame
 from consts import *
-from button import Button
 import random
 BOMB_COLOR = RED
 EMPTY_CELL_COLOR = GREEN
@@ -79,8 +78,6 @@ class Cell:
             self.pressed_color = EMPTY_CELL_COLOR
             self.current_color = EMPTY_CELL_COLOR
             
-        # self.button.normal_color = RED
-        # self.button.pressed_color = RED
         
         if self.bomb:
             self.color = GREEN
