@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Minesweeper</title>
+		<script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+		<style>
+			body {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				min-height: 100vh;
+				margin: 0;
+				background-color: #2c3e50; /* Dark background */
+				font-family: 'Inter', sans-serif; /* Using Inter font */
+				color: #ecf0f1;
+				flex-direction: column;
+			}
+			canvas {
+				border-radius: 12px; /* Rounded corners for the game canvas */
+				box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4); /* Soft shadow */
+				margin-top: 20px;
+			}
+			#game-container {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 20px;
+				background-color: #34495e; /* Slightly lighter dark background for container */
+				border-radius: 15px;
+				box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+			}
+			h1 {
+				color: #ecf0f1;
+				margin-bottom: 15px;
+				font-size: 2.5em;
+				text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+			}
+			#message-box {
+				background-color: #2ecc71; /* Green for messages */
+				color: white;
+				padding: 10px 20px;
+				border-radius: 8px;
+				margin-top: 20px;
+				font-size: 1.2em;
+				text-align: center;
+				display: none; /* Hidden by default */
+				opacity: 0;
+				transition: opacity 0.3s ease-in-out;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+			}
+			#message-box.show {
+				display: block;
+				opacity: 1;
+			}
+			.reset-button {
+				background-color: #e74c3c; /* Red for reset */
+				color: white;
+				padding: 10px 20px;
+				border: none;
+				border-radius: 8px;
+				cursor: pointer;
+				font-size: 1.2em;
+				margin-top: 20px;
+				transition: background-color 0.3s ease, transform 0.2s ease;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+			}
+			.reset-button:hover {
+				background-color: #c0392b;
+				transform: translateY(-2px);
+			}
+			.reset-button:active {
+				transform: translateY(0);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+			}
+		</style>
+	</head>
+	<body>
+		<div id="game-container">
+			<h1>Minesweeper</h1>
+			<div id="game-canvas"></div>
+			<div id="message-box"></div>
+			<button class="reset-button" id="resetButton" style="display: none">
+				Reset Game (Spacebar)
+			</button>
+		</div>
+
+		<script>
+			// --- Constants (from consts.py) ---
+			const SCREEN_WIDTH = 800;
+			const SCREEN_HEIGHT = 600;
+			const CELL_SIZE = 50;
+
+			// Colors (converted to hex for Phaser)
+			const WHITE = 0xffffff;
+			const GRAY = 0x787878; // (120,120,120)
+			const BLACK = 0x000000;
+			const RED = 0xff0000;
+			const GREEN = 0x00ff00;
+
+			const LIGHT_GRAY = 0xc8c8c8; // (200, 200, 200)
+			const DARK_GRAY = 0x505050; // (80, 80, 80)
+			const REVEALED_EMPTY_COLOR = 0xc0c0c0; // (192, 192, 192)
+			const FLAG_COLOR = 0xff8c00; // Orange (255, 140, 0)
+
+			const GOD_MODE = false; // From consts.py
+
+			// --- Message Box Utility ---
+			const messageBox = document.getElementById('message-box');
+			function showMessage(message, type = 'info') {
+				messageBox.textContent = message;
+				messageBox.className = 'show'; // Reset classes
+				if (type === 'win') {
+					messageBox.style.backgroundColor = '#2ecc71'; // Green for win
+				} else if (type === 'lose') {
+					messageBox.style.backgroundColor = '#e74c3c'; // Red for lose
+				} else {
+					messageBox.style.backgroundColor = '#3498db'; // Blue for info
+				}
+				// Hide after a delay if not a win/lose message
+				if (type === 'info') {
+					setTimeout(() => {
+						messageBox.classList.remove('show');
+					}, 3000);
+				}
+			}
+
+			function hideMessage() {
+				messageBox.classList.remove('show');
+			}
+
+			// --- Cell Class (from cell.py) ---
+			class Cell extends Phaser.GameObjects.Container {
+				constructor(scene, i, j, boardRef) {
+					// Call parent constructor for Phaser.GameObjects.Container
+					// x, y are pixel coordinates for the container
+					super(scene, i * CELL_SIZE, j * CELL_SIZE);
+
+					this.scene = scene;
+					this.i = i; // Column index
+					this.j = j; // Row index
+					this.board = boardRef; // Reference to the Board instance
+
+					this.state = 'Covered'; // "Covered", "Revealed", "Flagged"
+					this.bomb = Phaser.Math.RND.pick([true, false]); // Randomly assign bomb status
+					this.numNeighbourBombs = 0; // Number of bombs in adjacent cells
+
+					// Visual components
+					this.graphics = scene.add.graphics();
+					this.add(this.graphics); // Add graphics to the container
+
+					this.textObject = scene.add
+						.text(CELL_SIZE / 2, CELL_SIZE / 2, '', {
+							fontFamily: 'Inter',
+							fontSize: '24px',
+							color: '#000000', // Default black text
+							align: 'center',
+						})
+						.setOrigin(0.5); // Center the text within the cell
+					this.add(this.textObject); // Add text to the container
+
+					// Interaction properties
+					this.isHovered = false;
+					this.isPressed = false;
+					this.enabled = true; // Can be disabled if game over
+
+					// Set interactive area to be the full cell size
+					// This is crucial for matching the visual bounds
+					this.setSize(CELL_SIZE, CELL_SIZE);
+					this.setInteractive();
+
+					// Set initial visual state
+					this.updateVisual();
+
+					// Input event listeners
+					this.on('pointerover', () => {
+						if (
+							this.enabled &&
+							this.state === 'Covered' &&
+							!this.board.gameOver
+						) {
+							// Added !this.board.gameOver
+							this.isHovered = true;
+							this.updateVisual();
+						}
+					});
+
+					this.on('pointerout', () => {
+						if (this.enabled && !this.board.gameOver) {
+							// Added !this.board.gameOver
+							this.isHovered = false;
+							this.isPressed = false; // Ensure pressed state resets on mouse out
+							this.updateVisual();
+						}
+					});
+
+					this.on('pointerdown', (pointer) => {
+						if (!this.enabled || this.board.gameOver) return; // Disable interaction if game over
+
+						if (pointer.leftButtonDown()) {
+							// Left click
+							this.isPressed = true;
+							this.updateVisual();
+						} else if (pointer.rightButtonDown()) {
+							// Right click
+							this.toggleFlag();
+							this.board.checkWinCondition(); // Check win condition after flagging
+						}
+					});
+
+					this.on('pointerup', (pointer) => {
+						if (!this.enabled || this.board.gameOver) {
+							this.isPressed = false; // Reset pressed state even if game over
+							this.updateVisual();
+							return;
+						}
+
+						if (pointer.leftButtonReleased()) {
+							// Left click released
+							if (
+								this.isPressed &&
+								this.isHovered &&
+								this.state === 'Covered'
+							) {
+								this.board.onCellPressed(this); // Delegate to board for game logic
+							}
+							this.isPressed = false;
+							this.updateVisual();
+						}
+					});
+
+					scene.add.existing(this); // Add this container to the scene
+				}
+
+				updateVisual() {
+					this.graphics.clear();
+					let fillColor = GRAY;
+
+					if (this.state === 'Revealed') {
+						if (this.bomb) {
+							fillColor = RED; // Bomb color
+							this.textObject.setColor('#FFFFFF'); // White text for bomb
+						} else {
+							fillColor = REVEALED_EMPTY_COLOR; // Revealed empty cell color
+							this.textObject.setColor('#000000'); // Black text for numbers
+						}
+					} else {
+						// Covered or Flagged
+						if (this.isPressed) {
+							fillColor = DARK_GRAY; // Pressed color
+						} else if (this.isHovered) {
+							fillColor = LIGHT_GRAY; // Hover color
+						} else {
+							fillColor = GRAY; // Normal covered color
+						}
+					}
+
+					// Draw the 1-pixel black border as a background rectangle
+					this.graphics.fillStyle(BLACK);
+					this.graphics.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
+
+					// Draw the main filled rectangle, inset by 1 pixel on all sides
+					this.graphics.fillStyle(fillColor);
+					this.graphics.fillRect(1, 1, CELL_SIZE - 2, CELL_SIZE - 2);
+
+					// Update text
+					if (this.state === 'Flagged') {
+						this.textObject.setText('F').setColor(
+							Phaser.Display.Color.Interpolate.ColorWithColor(
+								new Phaser.Display.Color(FLAG_COLOR),
+								new Phaser.Display.Color(0xffffff), // White
+								100,
+								0,
+								50 // Mix 50% towards white for better visibility
+							).asString
+						);
+					} else if (this.state === 'Revealed') {
+						if (this.bomb) {
+							this.textObject.setText('B').setColor('#FFFFFF'); // White text for bomb
+						} else if (this.numNeighbourBombs > 0) {
+							this.textObject
+								.setText(String(this.numNeighbourBombs))
+								.setColor('#000000');
+						} else {
+							this.textObject.setText(''); // No text for 0 bombs
+						}
+					} else {
+						// Covered
+						if (GOD_MODE && this.bomb) {
+							this.textObject.setText('b').setColor('#FF00FF'); // Magenta for hidden bomb in GOD_MODE
+						} else {
+							this.textObject.setText('');
+						}
+					}
+				}
+
+				toggleFlag() {
+					if (this.state === 'Covered') {
+						this.state = 'Flagged';
+						this.board.showMessage(
+							`Cell (${this.i},${this.j}) flagged.`,
+							'info'
+						);
+					} else if (this.state === 'Flagged') {
+						this.state = 'Covered';
+						this.board.showMessage(
+							`Cell (${this.i},${this.j}) unflagged.`,
+							'info'
+						);
+					}
+					this.updateVisual();
+				}
+
+				reveal() {
+					if (this.state === 'Revealed') return; // Already revealed
+
+					this.state = 'Revealed';
+					this.updateVisual(); // Update visual immediately
+
+					if (this.bomb) {
+						this.board.gameOver = true;
+						this.board.showMessage(
+							'Game Over! You hit a bomb!',
+							'lose'
+						);
+						this.board.showAllBombs(); // Show all bombs on game over
+						this.board.resetButton.style.display = 'block'; // Show reset button
+					} else {
+						this.board.numEmptyCells--;
+						if (this.numNeighbourBombs === 0) {
+							this.board.revealAdjacentEmptyCells(this.i, this.j);
+						}
+						this.board.checkWinCondition(); // Check win condition after revealing
+					}
+				}
+
+				setBomb(isBomb) {
+					this.bomb = isBomb;
+				}
+
+				setNumNeighbourBombs(count) {
+					this.numNeighbourBombs = count;
+				}
+
+				clearBomb() {
+					this.bomb = false;
+				}
+
+				reset() {
+					this.bomb = Phaser.Math.RND.pick([true, false]);
+					this.state = 'Covered';
+					this.numNeighbourBombs = 0;
+					this.textObject.setText('');
+					this.enabled = true;
+					this.isHovered = false;
+					this.isPressed = false;
+					this.updateVisual(); // Reset visual state
+				}
+			}
+
+			// --- Board Class (from board.py) ---
+			class Board {
+				constructor(scene, messageBoxRef, resetButtonRef) {
+					this.scene = scene;
+					this.messageBox = messageBoxRef;
+					this.resetButton = resetButtonRef;
+
+					this.cells = [];
+					this.neighbours = [
+						[-1, -1],
+						[0, -1],
+						[1, -1],
+						[-1, 0],
+						[1, 0],
+						[-1, 1],
+						[0, 1],
+						[1, 1],
+					];
+
+					this.gameOver = false;
+					this.firstCellPress = true;
+					this.numEmptyCells = 0; // Number of non-bomb cells
+
+					this.initCells();
+					this.calculateInitialEmptyCells();
+				}
+
+				showMessage(message, type = 'info') {
+					this.messageBox.textContent = message;
+					this.messageBox.className = 'show'; // Reset classes
+					if (type === 'win') {
+						this.messageBox.style.backgroundColor = '#2ecc71'; // Green for win
+					} else if (type === 'lose') {
+						this.messageBox.style.backgroundColor = '#e74c3c'; // Red for lose
+					} else {
+						this.messageBox.style.backgroundColor = '#3498db'; // Blue for info
+					}
+					// Hide after a delay if not a win/lose message
+					if (type === 'info') {
+						setTimeout(() => {
+							this.messageBox.classList.remove('show');
+						}, 3000);
+					}
+				}
+
+				initCells() {
+					this.cells = []; // Clear existing cells
+					for (let j = 0; j < SCREEN_HEIGHT / CELL_SIZE; j++) {
+						this.cells.push([]);
+						for (let i = 0; i < SCREEN_WIDTH / CELL_SIZE; i++) {
+							const cell = new Cell(this.scene, i, j, this);
+							this.cells[j].push(cell);
+						}
+					}
+				}
+
+				calculateInitialEmptyCells() {
+					this.numEmptyCells = 0;
+					for (let j = 0; j < SCREEN_HEIGHT / CELL_SIZE; j++) {
+						for (let i = 0; i < SCREEN_WIDTH / CELL_SIZE; i++) {
+							if (!this.cells[j][i].bomb) {
+								this.numEmptyCells++;
+							}
+						}
+					}
+				}
+
+				numBombNeighbours(cell) {
+					let numBombs = 0;
+					for (const neighbour of this.neighbours) {
+						const neighbourX = cell.i + neighbour[0];
+						const neighbourY = cell.j + neighbour[1];
+
+						if (
+							neighbourX >= 0 &&
+							neighbourX < SCREEN_WIDTH / CELL_SIZE &&
+							neighbourY >= 0 &&
+							neighbourY < SCREEN_HEIGHT / CELL_SIZE
+						) {
+							if (
+								this.cells[neighbourY][neighbourX].bomb === true
+							) {
+								numBombs++;
+							}
+						}
+					}
+					return numBombs;
+				}
+
+				reset() {
+					this.gameOver = false;
+					this.firstCellPress = true;
+					this.hideMessage(); // Hide any game over/win messages
+					this.resetButton.style.display = 'none'; // Hide reset button
+
+					for (let j = 0; j < SCREEN_HEIGHT / CELL_SIZE; j++) {
+						for (let i = 0; i < SCREEN_WIDTH / CELL_SIZE; i++) {
+							this.cells[j][i].reset(); // Reset individual cell state
+						}
+					}
+					// Re-calculate bombs and empty cells after all cells are reset
+					this.calculateInitialEmptyCells();
+					this.showMessage('Game Reset!', 'info');
+				}
+
+				showAllBombs() {
+					for (let j = 0; j < SCREEN_HEIGHT / CELL_SIZE; j++) {
+						for (let i = 0; i < SCREEN_WIDTH / CELL_SIZE; i++) {
+							if (this.cells[j][i].bomb) {
+								this.cells[j][i].reveal(); // Force reveal bombs
+							}
+						}
+					}
+				}
+
+				onCellPressed(cell) {
+					if (this.gameOver) return;
+
+					if (this.firstCellPress) {
+						this.firstCellPress = false;
+						// Ensure the first clicked cell is not a bomb
+						if (cell.bomb) {
+							cell.clearBomb(); // Remove bomb from this cell
+							this.numEmptyCells++; // Increment empty cells count
+
+							// Find a new random spot for a bomb
+							let newBombPlaced = false;
+							while (!newBombPlaced) {
+								const randI = Phaser.Math.RND.between(
+									0,
+									SCREEN_WIDTH / CELL_SIZE - 1
+								);
+								const randJ = Phaser.Math.RND.between(
+									0,
+									SCREEN_HEIGHT / CELL_SIZE - 1
+								);
+								const targetCell = this.cells[randJ][randI];
+								if (
+									!targetCell.bomb &&
+									(targetCell.i !== cell.i ||
+										targetCell.j !== cell.j)
+								) {
+									targetCell.setBomb(true);
+									newBombPlaced = true;
+									this.numEmptyCells--; // Decrement empty cells count
+								}
+							}
+						}
+						// After first click, calculate all neighbor bomb counts
+						this.calculateAllNeighborBombs();
+					}
+
+					cell.reveal(); // Reveal the clicked cell
+				}
+
+				calculateAllNeighborBombs() {
+					for (let j = 0; j < SCREEN_HEIGHT / CELL_SIZE; j++) {
+						for (let i = 0; i < SCREEN_WIDTH / CELL_SIZE; i++) {
+							const cell = this.cells[j][i];
+							if (!cell.bomb) {
+								// Only calculate for non-bomb cells
+								const numBombs = this.numBombNeighbours(cell);
+								cell.setNumNeighbourBombs(numBombs);
+							}
+						}
+					}
+				}
+
+				revealAdjacentEmptyCells(i, j) {
+					// BFS-like approach for recursive reveal
+					let queue = [{ x: i, y: j }];
+					let visited = new Set();
+					visited.add(`${i},${j}`);
+
+					while (queue.length > 0) {
+						const current = queue.shift();
+						const currentCell = this.cells[current.y][current.x];
+
+						// Reveal if not already revealed and not flagged
+						if (
+							currentCell.state !== 'Revealed' &&
+							currentCell.state !== 'Flagged'
+						) {
+							currentCell.reveal();
+						}
+
+						// If it's an empty cell (0 bombs), add its neighbors to the queue
+						if (
+							currentCell.numNeighbourBombs === 0 &&
+							!currentCell.bomb
+						) {
+							for (const neighbour of this.neighbours) {
+								const neighbourX = current.x + neighbour[0];
+								const neighbourY = current.y + neighbour[1];
+
+								if (
+									neighbourX >= 0 &&
+									neighbourX < SCREEN_WIDTH / CELL_SIZE &&
+									neighbourY >= 0 &&
+									neighbourY < SCREEN_HEIGHT / CELL_SIZE
+								) {
+									const neighborCell =
+										this.cells[neighbourY][neighbourX];
+									const neighborKey = `${neighbourX},${neighbourY}`;
+
+									if (
+										!visited.has(neighborKey) &&
+										!neighborCell.bomb &&
+										neighborCell.state !== 'Flagged'
+									) {
+										visited.add(neighborKey);
+										queue.push({
+											x: neighbourX,
+											y: neighbourY,
+										});
+									}
+									// Also reveal adjacent numbered cells (non-bombs, non-flagged)
+									if (
+										!neighborCell.bomb &&
+										neighborCell.state === 'Covered' &&
+										!neighborCell.isFlagged()
+									) {
+										neighborCell.reveal();
+									}
+								}
+							}
+						}
+					}
+				}
+
+				checkWinCondition() {
+					if (this.gameOver) return; // Already lost
+
+					// Win condition: all non-bomb cells are revealed
+					if (this.numEmptyCells <= 0) {
+						this.gameOver = true;
+						this.showMessage('Congratulations! You won!', 'win');
+						this.resetButton.style.display = 'block'; // Show reset button
+						this.showAllBombs(); // Optionally show all bombs on win
+					}
+				}
+			}
+
+			// --- Phaser Game Configuration ---
+			const config = {
+				type: Phaser.AUTO,
+				width: SCREEN_WIDTH,
+				height: SCREEN_HEIGHT,
+				parent: 'game-canvas', // ID of the div to put the game in
+				scene: {
+					preload: preload,
+					create: create,
+					update: update,
+				},
+				scale: {
+					mode: Phaser.Scale.FIT,
+					autoCenter: Phaser.Scale.CENTER_BOTH,
+				},
+				render: {
+					pixelArt: false, // Set to true if you want pixel-perfect rendering for retro style
+				},
+				input: {
+					mouse: {
+						preventDefaultWheel: false, // Allow scrolling outside game
+						// disableContextMenu: true // Disable right-click context menu (useful for right-click game input)
+					},
+				},
+			};
+
+			let game;
+			let board;
+			let resetButton;
+			let keyboardSpace;
+
+			function preload() {
+				// Load any assets here if needed (e.g., bomb images, flag images)
+				// this.load.image('bomb', 'assets/bomb.png');
+				// this.load.image('flag', 'assets/flag.png');
+			}
+
+			function create() {
+				// Disable right-click context menu for the entire game canvas
+				this.input.mouse.disableContextMenu();
+
+				// Initialize the Board
+				board = new Board(
+					this,
+					messageBox,
+					document.getElementById('resetButton')
+				);
+
+				// Setup reset button listener
+				resetButton = document.getElementById('resetButton');
+				resetButton.addEventListener('click', () => board.reset());
+
+				// Setup spacebar for reset
+				keyboardSpace = this.input.keyboard.addKey(
+					Phaser.Input.Keyboard.KeyCodes.SPACE
+				);
+				keyboardSpace.on('down', () => {
+					if (board.gameOver) {
+						board.reset();
+					}
+				});
+
+				// Initial message
+				board.showMessage(
+					'Click to reveal, Right-click to flag!',
+					'info'
+				);
+			}
+
+			function update() {
+				// Game logic that runs every frame (if needed, but most Minesweeper logic is event-driven)
+			}
+
+			// Start the game
+			game = new Phaser.Game(config);
+		</script>
+	</body>
+</html>

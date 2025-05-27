@@ -30,7 +30,10 @@ class Cell:
 
         self.state = "Covered"
         self.color = GRAY
-        self.bomb = random.choice([True,False])
+        if random.random() < 0.2:
+            self.bomb = random.choice([True,False])
+        else:
+            self.bomb = False
         
     def draw(self,screen):
         pygame.draw.rect(screen, self.current_color, self.rect, border_radius=0)
@@ -83,7 +86,10 @@ class Cell:
             self.color = GREEN
     
     def reset(self):
-        self.bomb = random.choice([True,False])
+        if random.random() < 0.2:
+            self.bomb = random.choice([True,False])
+        else:
+            self.bomb = False
         self.text = ""
         self.enabled = True
         self.normal_color = GRAY

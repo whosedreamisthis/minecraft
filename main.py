@@ -5,7 +5,7 @@ from board import Board
 pygame.init()
 
 screen = pygame.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
-pygame.display.set_caption("Minesweepwe")
+pygame.display.set_caption("Minesweepwer")
 board = Board()
 running = True
 while running:
@@ -16,7 +16,6 @@ while running:
         if board.game_over:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    print("reset board")
                     board.reset()
         else:
             board.handle_event(event)
