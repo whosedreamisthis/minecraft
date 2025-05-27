@@ -16,7 +16,7 @@ class Cell:
         self.hover_color = hover_color
         self.pressed_color = pressed_color
         self.font_color = font_color
-        self.action = self.pressed
+        self.action = action#self.pressed
 
         # Initialize the font for rendering text
         # Using None for default Pygame font, you can specify a font file path here
@@ -30,7 +30,7 @@ class Cell:
 
         self.state = "Covered"
         self.color = GRAY
-        self.bomb = random.choice([True,False])
+        self.bomb = True#random.choice([True,False])
         
     def draw(self,screen):
         pygame.draw.rect(screen, self.current_color, self.rect, border_radius=0)
@@ -47,6 +47,9 @@ class Cell:
     def pressed(self):
         if not self.enabled:
             return
+    
+        if self.action:
+            self.action(self) 
         self.enabled = False
         if self.bomb:
             self.normal_color = BOMB_COLOR
@@ -67,8 +70,11 @@ class Cell:
         if self.bomb:
             self.color = GREEN
         
-        
+    def clear_bomb(self):
+        self.bomb = False
     def handle_event(self, event):
+        if not self.enabled:
+            return False
         """
         Handles Pygame events relevant to the button (mouse motion, mouse clicks).
 
@@ -94,6 +100,10 @@ class Cell:
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             # Check if the left mouse button was pressed down
+            
+            if event.button == 3 and self.rect.collidepoint(event.pos):
+                self.text = "F"
+                return True
             if event.button == 1: # 1 is the left mouse button
                 if self.is_hovered:
                     self.is_pressed = True
@@ -106,9 +116,10 @@ class Cell:
                 if self.is_pressed and self.is_hovered:
                     self.is_pressed = False
                     self.current_color = self.hover_color # Revert to hover color
-                    if self.action:
-                        self.action() # Execute the button's action function
-                        return True # Indicate that the action was performed
+                    self.pressed()
+                    # if self.action:
+                    #     self.action() # Execute the button's action function
+                    #     return True # Indicate that the action was performed
                 # Reset pressed state regardless of hover, to handle cases where mouse moves off while pressed
                 self.is_pressed = False 
                 # Set color back to normal or hover based on current mouse position
