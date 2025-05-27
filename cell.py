@@ -38,7 +38,7 @@ class Cell:
 
         # Render the text surface
         if GOD_MODE:
-            if self.bomb:
+            if self.bomb and self.text != "B":
                 self.text = "b"
         text_surface = self.font.render(self.text, True, self.font_color)
         
@@ -47,7 +47,14 @@ class Cell:
         
         # Blit (draw) the text surface onto the screen
         screen.blit(text_surface, text_rect)
-        
+    
+    def show_bomb(self):
+        if self.bomb:
+            self.text = "B"
+            self.normal_color = BOMB_COLOR
+            self.hover_color = BOMB_COLOR
+            self.pressed_color = BOMB_COLOR
+            self.current_color = BOMB_COLOR
     def pressed(self):
         if not self.enabled:
             return
@@ -78,7 +85,15 @@ class Cell:
         if self.bomb:
             self.color = GREEN
     
-    
+    def reset(self):
+        self.bomb = random.choice([True,False])
+        self.text = ""
+        self.enabled = True
+        self.normal_color = GRAY
+        self.hover_color = GRAY
+        self.pressed_color = GRAY
+        self.current_color = GRAY
+            
     def clear_bomb(self):
         self.bomb = False
     def handle_event(self, event):
