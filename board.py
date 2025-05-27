@@ -11,13 +11,19 @@ class Board():
         for j in range(SCREEN_HEIGHT//CELL_SIZE):
             self.cells.append([])
             for i in range(SCREEN_WIDTH//CELL_SIZE):
-                self.cells[j].append(Cell(j,i))
+                self.cells[j].append(Cell(i,j))
                 print(f"cell {i} {j} {self.cells[j][i]}")
                 
     def draw(self,screen):
         for j in range(SCREEN_HEIGHT//CELL_SIZE):
             for i in range(SCREEN_WIDTH//CELL_SIZE):
                 self.cells[j][i].draw(screen)
+                
+    def handle_event(self,event):
+        for j in range(SCREEN_HEIGHT//CELL_SIZE):
+            for i in range(SCREEN_WIDTH//CELL_SIZE):
+                self.cells[j][i].handle_event(event)
+        
 
     
     

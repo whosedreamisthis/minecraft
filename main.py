@@ -11,8 +11,10 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        board.handle_event(event)
     
     screen.fill(WHITE)
+    
     board.draw(screen)
     pygame.display.update()
             
