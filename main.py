@@ -5,7 +5,7 @@ from board import Board
 pygame.init()
 
 screen = pygame.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
-pygame.display.set_caption("Minecraft")
+pygame.display.set_caption("Minesweepwe")
 board = Board()
 running = True
 while running:
