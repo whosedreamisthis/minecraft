@@ -99,7 +99,7 @@ class Cell:
                     self.is_pressed = True
                     self.current_color = self.pressed_color # Change color to pressed color
 
-        elif event.type == pygame.MOUSEBUTTONUP:
+        # elif event.type == pygame.MOUSEBUTTONUP:
             # Check if the left mouse button was released
             if event.button == 1:
                 # If the button was pressed and the mouse is still hovering (clicked)
