@@ -17,6 +17,7 @@ class Cell:
         self.pressed_color = pressed_color
         self.font_color = font_color
         self.action = action#self.pressed
+        self.num_neighbour_bombs = -1
 
         # Initialize the font for rendering text
         # Using None for default Pygame font, you can specify a font file path here
@@ -30,12 +31,15 @@ class Cell:
 
         self.state = "Covered"
         self.color = GRAY
-        self.bomb = True#random.choice([True,False])
+        self.bomb = random.choice([True,False])
         
     def draw(self,screen):
         pygame.draw.rect(screen, self.current_color, self.rect, border_radius=0)
 
         # Render the text surface
+        if GOD_MODE:
+            if self.bomb:
+                self.text = "b"
         text_surface = self.font.render(self.text, True, self.font_color)
         
         # Get the rectangle for the text surface and center it on the button's rectangle
@@ -48,9 +52,13 @@ class Cell:
         if not self.enabled:
             return
         self.text = ""
+        
     
         if self.action:
             self.action(self) 
+            
+        if self.num_neighbour_bombs > 0:
+            self.text = str(self.num_neighbour_bombs)
         self.enabled = False
         if self.bomb:
             self.normal_color = BOMB_COLOR
@@ -67,10 +75,10 @@ class Cell:
         # self.button.normal_color = RED
         # self.button.pressed_color = RED
         
-        print(f"button pressed {self.i} {self.j}")
         if self.bomb:
             self.color = GREEN
-        
+    
+    
     def clear_bomb(self):
         self.bomb = False
     def handle_event(self, event):
