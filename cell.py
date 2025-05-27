@@ -47,6 +47,7 @@ class Cell:
     def pressed(self):
         if not self.enabled:
             return
+        self.text = ""
     
         if self.action:
             self.action(self) 
@@ -102,7 +103,7 @@ class Cell:
             # Check if the left mouse button was pressed down
             
             if event.button == 3 and self.rect.collidepoint(event.pos):
-                self.text = "F"
+                self.text = "F" if self.text == "" else ""
                 return True
             if event.button == 1: # 1 is the left mouse button
                 if self.is_hovered:
